@@ -9,16 +9,22 @@ import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
+import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.addCallback
 import androidx.appcompat.app.ActionBar
 import androidx.fragment.app.FragmentManager
 import androidx.fragment.app.FragmentTransaction
 import androidx.fragment.app.commit
+import androidx.lifecycle.lifecycleScope
+import com.wireguard.android.Application
 import com.wireguard.android.R
 import com.wireguard.android.fragment.TunnelDetailFragment
 import com.wireguard.android.fragment.TunnelEditorFragment
 import com.wireguard.android.model.ObservableTunnel
+import com.wireguard.android.util.DeepLinkTunnelImporter
+import com.wireguard.android.util.ErrorMessages
+import kotlinx.coroutines.launch
 
 /**
  * CRUD interface for WireGuard tunnels. This activity serves as the main entry point to the
@@ -63,6 +69,14 @@ class MainActivity : BaseActivity(), FragmentManager.OnBackStackChangedListener 
         supportFragmentManager.addOnBackStackChangedListener(this)
         backPressedCallback = onBackPressedDispatcher.addCallback(this) { handleBackPressed() }
         onBackStackChanged()
+        if (savedInstanceState == null)
+            handleDeepLinkIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleDeepLinkIntent(intent)
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
@@ -125,5 +139,28 @@ class MainActivity : BaseActivity(), FragmentManager.OnBackStackChangedListener 
             }
         }
         return true
+    }
+
+    private fun handleDeepLinkIntent(intent: Intent?) {
+        if (intent == null) return
+        lifecycleScope.launch {
+            val result = try {
+                DeepLinkTunnelImporter.importFromIntent(intent)
+            } catch (e: Throwable) {
+                Toast.makeText(this@MainActivity, getString(R.string.import_error, ErrorMessages[e]), Toast.LENGTH_LONG).show()
+                return@launch
+            } ?: return@launch
+
+            selectedTunnel = Application.getTunnelManager().getTunnels()[result.tunnelName]
+            val message = getString(
+                when {
+                    result.started -> R.string.deeplink_import_and_start_success
+                    result.updatedExisting -> R.string.deeplink_import_update_success
+                    else -> R.string.deeplink_import_success
+                },
+                result.tunnelName
+            )
+            Toast.makeText(this@MainActivity, message, Toast.LENGTH_LONG).show()
+        }
     }
 }

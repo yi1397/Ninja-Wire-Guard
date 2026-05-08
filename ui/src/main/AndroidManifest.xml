@@ -9,10 +9,6 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
-    <uses-permission
-        android:name="android.permission.SYSTEM_ALERT_WINDOW"
-        android:minSdkVersion="34" />
     <uses-permission
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28"
@@ -56,11 +52,26 @@
 
         <activity
             android:name=".activity.MainActivity"
-            android:exported="true">
+            android:exported="true"
+            android:launchMode="singleTop">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <intent-filter android:label="@string/app_name">
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data
+                    android:host="import"
+                    android:scheme="ninjawg" />
+                <data
+                    android:host="apply"
+                    android:scheme="ninjawg" />
             </intent-filter>
 
             <intent-filter>
@@ -130,9 +141,9 @@
             android:exported="true"
             android:permission="${applicationId}.permission.CONTROL_TUNNELS">
             <intent-filter>
-                <action android:name="com.wireguard.android.action.REFRESH_TUNNEL_STATES" />
-                <action android:name="com.wireguard.android.action.SET_TUNNEL_UP" />
-                <action android:name="com.wireguard.android.action.SET_TUNNEL_DOWN" />
+                <action android:name="${applicationId}.action.REFRESH_TUNNEL_STATES" />
+                <action android:name="${applicationId}.action.SET_TUNNEL_UP" />
+                <action android:name="${applicationId}.action.SET_TUNNEL_DOWN" />
             </intent-filter>
         </receiver>
 

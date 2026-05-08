@@ -16,6 +16,7 @@ import com.wireguard.android.Application.Companion.get
 import com.wireguard.android.Application.Companion.getBackend
 import com.wireguard.android.Application.Companion.getTunnelManager
 import com.wireguard.android.BR
+import com.wireguard.android.BuildConfig
 import com.wireguard.android.R
 import com.wireguard.android.backend.Statistics
 import com.wireguard.android.backend.Tunnel
@@ -217,15 +218,15 @@ class TunnelManager(private val configStore: ConfigStore) : BaseObservable() {
                 val manager = getTunnelManager()
                 if (intent == null) return@launch
                 val action = intent.action ?: return@launch
-                if ("com.wireguard.android.action.REFRESH_TUNNEL_STATES" == action) {
+                if (ACTION_REFRESH_TUNNEL_STATES == action) {
                     manager.refreshTunnelStates()
                     return@launch
                 }
                 if (!UserKnobs.allowRemoteControlIntents.first())
                     return@launch
                 val state = when (action) {
-                    "com.wireguard.android.action.SET_TUNNEL_UP" -> Tunnel.State.UP
-                    "com.wireguard.android.action.SET_TUNNEL_DOWN" -> Tunnel.State.DOWN
+                    ACTION_SET_TUNNEL_UP -> Tunnel.State.UP
+                    ACTION_SET_TUNNEL_DOWN -> Tunnel.State.DOWN
                     else -> return@launch
                 }
                 val tunnelName = intent.getStringExtra("tunnel") ?: return@launch
@@ -250,5 +251,8 @@ class TunnelManager(private val configStore: ConfigStore) : BaseObservable() {
 
     companion object {
         private const val TAG = "WireGuard/TunnelManager"
+        private val ACTION_REFRESH_TUNNEL_STATES = "${BuildConfig.APPLICATION_ID}.action.REFRESH_TUNNEL_STATES"
+        private val ACTION_SET_TUNNEL_UP = "${BuildConfig.APPLICATION_ID}.action.SET_TUNNEL_UP"
+        private val ACTION_SET_TUNNEL_DOWN = "${BuildConfig.APPLICATION_ID}.action.SET_TUNNEL_DOWN"
     }
 }
