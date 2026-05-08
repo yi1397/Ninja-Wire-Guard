@@ -6,12 +6,14 @@ package com.wireguard.android.activity
 
 import android.content.Intent
 import android.os.Bundle
+import android.util.Log
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.addCallback
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.ActionBar
 import androidx.fragment.app.FragmentManager
 import androidx.fragment.app.FragmentTransaction
@@ -19,6 +21,8 @@ import androidx.fragment.app.commit
 import androidx.lifecycle.lifecycleScope
 import com.wireguard.android.Application
 import com.wireguard.android.R
+import com.wireguard.android.backend.GoBackend
+import com.wireguard.android.backend.Tunnel
 import com.wireguard.android.fragment.TunnelDetailFragment
 import com.wireguard.android.fragment.TunnelEditorFragment
 import com.wireguard.android.model.ObservableTunnel
@@ -35,6 +39,16 @@ class MainActivity : BaseActivity(), FragmentManager.OnBackStackChangedListener 
     private var actionBar: ActionBar? = null
     private var isTwoPaneLayout = false
     private var backPressedCallback: OnBackPressedCallback? = null
+    private var pendingDeepLinkTunnel: ObservableTunnel? = null
+    private var pendingDeepLinkTunnelName: String? = null
+    private val permissionActivityResultLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        val tunnel = pendingDeepLinkTunnel
+        val tunnelName = pendingDeepLinkTunnelName
+        pendingDeepLinkTunnel = null
+        pendingDeepLinkTunnelName = null
+        if (tunnel != null && tunnelName != null)
+            lifecycleScope.launch { startDeepLinkTunnel(tunnel, tunnelName) }
+    }
 
     private fun handleBackPressed() {
         val backStackEntries = supportFragmentManager.backStackEntryCount
@@ -151,10 +165,14 @@ class MainActivity : BaseActivity(), FragmentManager.OnBackStackChangedListener 
                 return@launch
             } ?: return@launch
 
-            selectedTunnel = Application.getTunnelManager().getTunnels()[result.tunnelName]
+            val tunnel = Application.getTunnelManager().getTunnels()[result.tunnelName]
+            selectedTunnel = tunnel
+            if (result.shouldStart && tunnel != null) {
+                startDeepLinkTunnelWithPermission(tunnel, result.tunnelName)
+                return@launch
+            }
             val message = getString(
                 when {
-                    result.started -> R.string.deeplink_import_and_start_success
                     result.updatedExisting -> R.string.deeplink_import_update_success
                     else -> R.string.deeplink_import_success
                 },
@@ -162,5 +180,40 @@ class MainActivity : BaseActivity(), FragmentManager.OnBackStackChangedListener 
             )
             Toast.makeText(this@MainActivity, message, Toast.LENGTH_LONG).show()
         }
+    }
+
+    private suspend fun startDeepLinkTunnelWithPermission(tunnel: ObservableTunnel, tunnelName: String) {
+        if (Application.getBackend() is GoBackend) {
+            try {
+                val intent = GoBackend.VpnService.prepare(this)
+                if (intent != null) {
+                    pendingDeepLinkTunnel = tunnel
+                    pendingDeepLinkTunnelName = tunnelName
+                    permissionActivityResultLauncher.launch(intent)
+                    return
+                }
+            } catch (e: Throwable) {
+                val message = getString(R.string.error_prepare, ErrorMessages[e])
+                Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+                Log.e(TAG, message, e)
+                return
+            }
+        }
+        startDeepLinkTunnel(tunnel, tunnelName)
+    }
+
+    private suspend fun startDeepLinkTunnel(tunnel: ObservableTunnel, tunnelName: String) {
+        try {
+            Application.getTunnelManager().setTunnelState(tunnel, Tunnel.State.UP)
+            Toast.makeText(this, getString(R.string.deeplink_import_and_start_success, tunnelName), Toast.LENGTH_LONG).show()
+        } catch (e: Throwable) {
+            val message = getString(R.string.error_up, ErrorMessages[e])
+            Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+            Log.e(TAG, message, e)
+        }
+    }
+
+    companion object {
+        private const val TAG = "WG/MainActivity"
     }
 }

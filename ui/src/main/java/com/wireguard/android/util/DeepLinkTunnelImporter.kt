@@ -19,9 +19,16 @@ import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.nio.charset.StandardCharsets
+import java.time.Instant
+import java.time.format.DateTimeParseException
 
 object DeepLinkTunnelImporter {
-    data class Result(val tunnelName: String, val updatedExisting: Boolean, val started: Boolean)
+    data class Result(
+        val tunnelName: String,
+        val updatedExisting: Boolean,
+        val shouldStart: Boolean,
+        val autoDeleteAtMillis: Long?
+    )
 
     suspend fun importFromIntent(intent: Intent): Result? {
         if (intent.action != Intent.ACTION_VIEW) return null
@@ -30,13 +37,18 @@ object DeepLinkTunnelImporter {
 
         val configText = resolveConfigText(uri)
             ?: throw IllegalArgumentException("Missing conf, config, conf_b64, config_b64, url, or fragment")
+        val metadata = parseMetadata(configText)
+        val configForParser = stripMetadata(configText)
         val config = withContext(Dispatchers.Default) {
-            Config.parse(ByteArrayInputStream(configText.toByteArray(StandardCharsets.UTF_8)))
+            Config.parse(ByteArrayInputStream(configForParser.toByteArray(StandardCharsets.UTF_8)))
         }
         val name = resolveName(uri)
-        val shouldStart = uri.booleanQueryParameter("up") ||
-            uri.booleanQueryParameter("start") ||
-            uri.booleanQueryParameter("activate")
+        val shouldStart = uri.booleanQueryParameter("up")
+            ?: uri.booleanQueryParameter("start")
+            ?: uri.booleanQueryParameter("activate")
+            ?: metadata.activate
+            ?: true
+        val autoDeleteAtMillis = resolveAutoDeleteAtMillis(uri, metadata)
         val manager = Application.getTunnelManager()
         val tunnels = manager.getTunnels()
         val existing = tunnels[name]
@@ -46,9 +58,11 @@ object DeepLinkTunnelImporter {
         } else {
             manager.create(name, config)
         }
-        if (shouldStart)
-            manager.setTunnelState(tunnel, Tunnel.State.UP)
-        return Result(tunnel.name, existing != null, shouldStart)
+        if (autoDeleteAtMillis != null)
+            AutoDeleteTunnelScheduler.schedule(Application.get().applicationContext, tunnel.name, autoDeleteAtMillis)
+        else
+            AutoDeleteTunnelScheduler.cancel(Application.get().applicationContext, tunnel.name)
+        return Result(tunnel.name, existing != null, shouldStart, autoDeleteAtMillis)
     }
 
     private suspend fun resolveConfigText(uri: Uri): String? {
@@ -110,14 +124,84 @@ object DeepLinkTunnelImporter {
         }
     }
 
-    private fun Uri.booleanQueryParameter(name: String): Boolean {
-        return when (getQueryParameter(name)?.lowercase()) {
-            "1", "true", "yes", "on" -> true
-            else -> false
+    private fun resolveAutoDeleteAtMillis(uri: Uri, metadata: Metadata): Long? {
+        val now = System.currentTimeMillis()
+        uri.getQueryParameter("delete_after")?.let { return now + parseDurationMillis(it) }
+        uri.getQueryParameter("delete_in")?.let { return now + parseDurationMillis(it) }
+        uri.getQueryParameter("ttl")?.let { return now + parseDurationMillis(it) }
+        uri.getQueryParameter("delete_at")?.let { return parseTimestampMillis(it) }
+        uri.getQueryParameter("expires_at")?.let { return parseTimestampMillis(it) }
+        uri.getQueryParameter("expires")?.let { return parseTimestampMillis(it) }
+        return metadata.deleteAtMillis
+    }
+
+    private fun parseMetadata(configText: String): Metadata {
+        var activate: Boolean? = null
+        var deleteAtMillis: Long? = null
+        val now = System.currentTimeMillis()
+        configText.lineSequence().forEach { line ->
+            val match = METADATA_PATTERN.matchEntire(line) ?: return@forEach
+            when (match.groupValues[1].lowercase()) {
+                "activate", "up", "start" -> activate = match.groupValues[2].toBooleanOrNull()
+                "delete-after", "auto-delete-after", "ttl" -> deleteAtMillis = now + parseDurationMillis(match.groupValues[2])
+                "delete-at", "expires-at", "expires" -> deleteAtMillis = parseTimestampMillis(match.groupValues[2])
+            }
+        }
+        return Metadata(activate, deleteAtMillis)
+    }
+
+    private fun stripMetadata(configText: String) =
+        configText.lineSequence()
+            .filterNot { METADATA_PATTERN.matches(it) }
+            .joinToString("\n")
+
+    private fun parseDurationMillis(rawValue: String): Long {
+        val value = rawValue.trim()
+        val match = DURATION_PATTERN.matchEntire(value)
+            ?: throw IllegalArgumentException("Invalid duration: $rawValue")
+        val amount = match.groupValues[1].toLong()
+        val multiplier = when (match.groupValues[2].lowercase()) {
+            "", "s", "sec", "secs", "second", "seconds" -> 1000L
+            "m", "min", "mins", "minute", "minutes" -> 60_000L
+            "h", "hr", "hrs", "hour", "hours" -> 3_600_000L
+            "d", "day", "days" -> 86_400_000L
+            else -> throw IllegalArgumentException("Invalid duration unit: $rawValue")
+        }
+        require(amount > 0) { "Duration must be positive" }
+        return Math.multiplyExact(amount, multiplier)
+    }
+
+    private fun parseTimestampMillis(rawValue: String): Long {
+        val value = rawValue.trim()
+        value.toLongOrNull()?.let {
+            return if (it < 10_000_000_000L) it * 1000 else it
+        }
+        try {
+            return Instant.parse(value).toEpochMilli()
+        } catch (_: DateTimeParseException) {
+            throw IllegalArgumentException("Invalid timestamp: $rawValue")
         }
     }
 
+    private fun Uri.booleanQueryParameter(name: String): Boolean? {
+        return when (getQueryParameter(name)?.lowercase()) {
+            "1", "true", "yes", "on" -> true
+            "0", "false", "no", "off" -> false
+            else -> null
+        }
+    }
+
+    private fun String.toBooleanOrNull() = when (trim().lowercase()) {
+        "1", "true", "yes", "on" -> true
+        "0", "false", "no", "off" -> false
+        else -> null
+    }
+
+    private data class Metadata(val activate: Boolean?, val deleteAtMillis: Long?)
+
     private val SUPPORTED_SCHEMES = setOf("ninjawg")
+    private val METADATA_PATTERN = Regex("^\\s*[#;]\\s*NinjaWG-(Activate|Up|Start|Delete-After|Auto-Delete-After|TTL|Delete-At|Expires-At|Expires)\\s*:\\s*(.*?)\\s*$", RegexOption.IGNORE_CASE)
+    private val DURATION_PATTERN = Regex("^(\\d+)\\s*([a-zA-Z]*)$")
     private const val DEFAULT_TUNNEL_NAME = "wg"
     private const val DOWNLOAD_TIMEOUT_MS = 10000
     private const val MAX_CONFIG_BYTES = 64 * 1024

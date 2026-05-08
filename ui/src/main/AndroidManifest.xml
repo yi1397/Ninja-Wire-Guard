@@ -129,6 +129,10 @@
         </receiver>
 
         <receiver
+            android:name=".util.AutoDeleteTunnelReceiver"
+            android:exported="false" />
+
+        <receiver
             android:name=".updater.Updater$AppUpdatedReceiver"
             android:exported="true">
             <intent-filter>

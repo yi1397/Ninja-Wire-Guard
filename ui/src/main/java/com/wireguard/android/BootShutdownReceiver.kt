@@ -9,6 +9,7 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 import com.wireguard.android.backend.WgQuickBackend
+import com.wireguard.android.util.AutoDeleteTunnelScheduler
 import com.wireguard.android.util.applicationScope
 import kotlinx.coroutines.launch
 
@@ -20,6 +21,7 @@ class BootShutdownReceiver : BroadcastReceiver() {
             val tunnelManager = Application.getTunnelManager()
             if (Intent.ACTION_BOOT_COMPLETED == action) {
                 Log.i(TAG, "Broadcast receiver restoring state (boot)")
+                AutoDeleteTunnelScheduler.rescheduleAll(context)
                 tunnelManager.restoreState(false)
             } else if (Intent.ACTION_SHUTDOWN == action) {
                 Log.i(TAG, "Broadcast receiver saving state (shutdown)")
