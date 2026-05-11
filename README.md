@@ -1,16 +1,16 @@
 # Ninja WG
 
-Ninja WG는 [wireguard-android](https://github.com/WireGuard/wireguard-android)를
-기반으로 만든 Android WireGuard 클라이언트입니다.
+Ninja WG is an Android WireGuard client with browser deep link support.
 
-- 앱 이름: `Ninja WG`
-- 패키지 이름: `com.ninja.wireguard`
-- 딥링크 스킴: `ninjawg://`
+- App name: `Ninja WG`
+- Package name: `com.ninja.wireguard`
+- Deep link scheme: `ninjawg://`
 
-브라우저 딥링크로 WireGuard `.conf`를 바로 가져와 터널을 생성/갱신할 수 있고,
-받는 즉시 활성화하거나 일정 시간이 지난 뒤 터널을 자동 삭제할 수 있습니다.
+The app can import or update a WireGuard `.conf` file from a browser deep link,
+activate the tunnel immediately, and optionally delete the tunnel after a
+configured time.
 
-## 빌드
+## Build
 
 APK:
 
@@ -24,57 +24,58 @@ AAB:
 ./gradlew :ui:bundleRelease
 ```
 
-기본 산출물 경로:
+Default output paths:
 
 ```text
 ui/build/outputs/apk/release/
 ui/build/outputs/bundle/release/
 ```
 
-배포용 APK/AAB는 매 업데이트마다 같은 release key로 서명해야 합니다.
+Release APKs and AABs must be signed with the same release key for every
+update.
 
-## 딥링크
+## Deep Links
 
-지원하는 딥링크:
+Supported deep links:
 
 ```text
 ninjawg://import
 ninjawg://apply
 ```
 
-conf 전달 방식은 아래 중 하나를 사용합니다.
+Provide the config with one of these methods.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 | --- | --- |
-| `url` | URL 인코딩된 `.conf` 파일 주소 |
-| `conf` | URL 인코딩된 WireGuard conf 원문 |
-| `config` | `conf`와 동일 |
-| `conf_b64` | URL-safe base64로 인코딩된 conf |
-| `config_b64` | `conf_b64`와 동일 |
-| URL fragment | `[Interface]`가 포함된 conf 원문 |
+| `url` | URL-encoded `.conf` file URL |
+| `conf` | URL-encoded raw WireGuard config |
+| `config` | Same as `conf` |
+| `conf_b64` | URL-safe base64 encoded config |
+| `config_b64` | Same as `conf_b64` |
+| URL fragment | Raw config text containing `[Interface]` |
 
-직접 스킴 예시:
+Direct scheme example:
 
 ```text
 ninjawg://import?name=demo&url=https%3A%2F%2Fexample.com%2Fdemo.conf&delete_after=10m
 ```
 
-브라우저/HTML 예시:
+Browser/HTML example:
 
 ```html
 <a href="intent://import?name=demo&url=https%3A%2F%2Fexample.com%2Fdemo.conf&delete_after=10m#Intent;scheme=ninjawg;package=com.ninja.wireguard;end">
-  Ninja WG 적용
+  Apply Ninja WG
 </a>
 ```
 
-Android 브라우저에서는 `intent://...#Intent;...;end` 형식을 권장합니다.
-패키지 이름을 직접 지정할 수 있어 다른 앱으로 열릴 가능성이 줄어듭니다.
+For Android browsers, the `intent://...#Intent;...;end` form is recommended
+because it targets the package directly.
 
-## 딥링크 파라미터
+## Deep Link Parameters
 
-### 터널 이름
+### Tunnel Name
 
-아래 중 하나를 사용합니다.
+Use one of these parameters:
 
 ```text
 name=demo
@@ -82,15 +83,15 @@ tunnel=demo
 profile=demo
 ```
 
-이름이 없으면 기본값은 `wg`입니다.
+If no name is provided, the default name is `wg`.
 
-이름의 특수문자는 `_`로 치환되고, `.conf` 확장자는 제거됩니다.
+Special characters are replaced with `_`, and a `.conf` suffix is removed.
 
-### 즉시 활성화
+### Immediate Activation
 
-기본값은 `true`입니다. 즉, conf를 받으면 바로 터널을 켭니다.
+The default is `true`, so imported tunnels are turned on immediately.
 
-즉시 활성화 끄기:
+Disable immediate activation:
 
 ```text
 activate=0
@@ -98,7 +99,7 @@ start=0
 up=0
 ```
 
-즉시 활성화 명시:
+Enable immediate activation explicitly:
 
 ```text
 activate=1
@@ -106,21 +107,21 @@ start=true
 up=yes
 ```
 
-true로 처리되는 값:
+Accepted true values:
 
 ```text
 1, true, yes, on
 ```
 
-false로 처리되는 값:
+Accepted false values:
 
 ```text
 0, false, no, off
 ```
 
-### 자동 삭제
+### Auto Delete
 
-지정한 시간이 지난 뒤 터널을 삭제합니다.
+Delete the tunnel after a duration:
 
 ```text
 delete_after=10m
@@ -128,7 +129,7 @@ delete_in=1h
 ttl=7d
 ```
 
-특정 시각에 삭제할 수도 있습니다.
+Delete the tunnel at a specific time:
 
 ```text
 delete_at=2026-05-08T12:00:00Z
@@ -136,24 +137,24 @@ expires_at=2026-05-08T12:00:00Z
 expires=1778236800
 ```
 
-지원하는 시간 단위:
+Supported duration units:
 
-| 단위 | 의미 |
+| Unit | Meaning |
 | --- | --- |
-| `s`, `sec`, `secs`, `second`, `seconds` | 초 |
-| `m`, `min`, `mins`, `minute`, `minutes` | 분 |
-| `h`, `hr`, `hrs`, `hour`, `hours` | 시간 |
-| `d`, `day`, `days` | 일 |
+| `s`, `sec`, `secs`, `second`, `seconds` | seconds |
+| `m`, `min`, `mins`, `minute`, `minutes` | minutes |
+| `h`, `hr`, `hrs`, `hour`, `hours` | hours |
+| `d`, `day`, `days` | days |
 
-timestamp는 Unix seconds, Unix milliseconds, ISO-8601 UTC 문자열을 지원합니다.
+Timestamps can be Unix seconds, Unix milliseconds, or ISO-8601 UTC strings.
 
-## conf 추가 문법
+## Config Metadata Syntax
 
-Ninja WG 전용 메타데이터를 `.conf` 안에 주석으로 넣을 수 있습니다.
-이 메타데이터 줄은 WireGuard 파싱 전에 제거되므로 실제 WireGuard conf는
-정상 형식 그대로 유지됩니다.
+Ninja WG metadata can be embedded in the `.conf` file as comments. These lines
+are removed before the WireGuard parser runs, so the actual config remains a
+valid normal WireGuard config.
 
-예시:
+Example:
 
 ```conf
 # NinjaWG-Activate: true
@@ -171,7 +172,7 @@ Endpoint = vpn.example.com:51820
 PersistentKeepalive = 25
 ```
 
-지원하는 메타데이터:
+Supported metadata keys:
 
 ```text
 NinjaWG-Activate
@@ -185,36 +186,36 @@ NinjaWG-Expires-At
 NinjaWG-Expires
 ```
 
-`#`와 `;` 주석을 모두 지원합니다.
+Both `#` and `;` comment prefixes are supported.
 
 ```conf
 ; NinjaWG-Delete-After: 30m
 ```
 
-## 우선순위
+## Priority
 
-딥링크 파라미터가 conf 내부 메타데이터보다 우선합니다.
+Deep link parameters override config metadata.
 
-예시:
+Example:
 
 ```text
 ninjawg://import?name=demo&url=https%3A%2F%2Fexample.com%2Fdemo.conf&activate=0&delete_after=30m
 ```
 
-위 링크로 열면 conf 안에 `# NinjaWG-Activate: true`가 있어도 터널을 즉시
-활성화하지 않습니다. 딥링크의 `activate=0`이 우선입니다.
+If the linked config contains `# NinjaWG-Activate: true`, the tunnel still will
+not be activated immediately because `activate=0` is set in the deep link.
 
-## 전체 예시
+## Full Example
 
 HTML:
 
 ```html
 <a href="intent://import?name=demo&url=https%3A%2F%2Fexample.com%2Fdemo.conf&activate=1&delete_after=30m#Intent;scheme=ninjawg;package=com.ninja.wireguard;end">
-  30분 터널 적용
+  Apply 30-minute tunnel
 </a>
 ```
 
-conf:
+Config:
 
 ```conf
 # NinjaWG-Activate: true
@@ -231,16 +232,11 @@ Endpoint = vpn.example.com:51820
 PersistentKeepalive = 25
 ```
 
-## 참고
+## Notes
 
-- `url` 값은 반드시 URL 인코딩해야 합니다.
-- Android VPN 권한이 아직 없으면 앱이 권한 요청 화면을 띄웁니다.
-- 터널은 켜졌는데 트래픽이 `RX 0 B`라면 딥링크 문제가 아니라 WireGuard
-  핸드셰이크 문제입니다. 서버 peer 등록, public/private key, endpoint,
-  방화벽, `AllowedIPs`를 확인해야 합니다.
-
-## Upstream
-
-이 프로젝트는 WireGuard for Android를 기반으로 합니다.
-원본 프로젝트와 라이선스는 [wireguard-android](https://github.com/WireGuard/wireguard-android)를
-참고하세요.
+- `url` values must be URL-encoded.
+- If Android VPN permission has not been granted yet, the app opens the VPN
+  permission prompt.
+- If the tunnel turns on but traffic shows `RX 0 B`, check server peer
+  registration, public/private keys, endpoint, firewall, and `AllowedIPs`.
+  That is a WireGuard handshake issue, not a deep link issue.
