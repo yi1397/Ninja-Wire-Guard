@@ -7,6 +7,7 @@ package com.wireguard.android.util
 import android.content.Intent
 import android.net.Uri
 import android.util.Base64
+import android.util.Log
 import com.wireguard.android.Application
 import com.wireguard.android.backend.Tunnel
 import com.wireguard.config.Config
@@ -37,6 +38,7 @@ object DeepLinkTunnelImporter {
 
         val configText = resolveConfigText(uri)
             ?: throw IllegalArgumentException("Missing conf, config, conf_b64, config_b64, url, or fragment")
+        Log.i(TAG, "Resolved deep link config text from ${describeUri(uri)}")
         val metadata = parseMetadata(configText)
         val configForParser = stripMetadata(configText)
         val config = withContext(Dispatchers.Default) {
@@ -54,16 +56,20 @@ object DeepLinkTunnelImporter {
         val existing = tunnels[name]
         val tunnel = if (existing != null) {
             manager.setTunnelConfig(existing, config)
+            Log.i(TAG, "Updated tunnel $name from deep link")
             existing
         } else {
-            manager.create(name, config)
+            manager.create(name, config).also { Log.i(TAG, "Created tunnel $name from deep link") }
         }
         if (autoDeleteAtMillis != null)
             AutoDeleteTunnelScheduler.schedule(Application.get().applicationContext, tunnel.name, autoDeleteAtMillis)
         else
             AutoDeleteTunnelScheduler.cancel(Application.get().applicationContext, tunnel.name)
+        Log.i(TAG, "Deep link import complete for ${tunnel.name}, shouldStart=$shouldStart, autoDeleteAtMillis=$autoDeleteAtMillis")
         return Result(tunnel.name, existing != null, shouldStart, autoDeleteAtMillis)
     }
+
+    fun describeIntent(intent: Intent) = intent.data?.let(::describeUri) ?: "<no data>"
 
     private suspend fun resolveConfigText(uri: Uri): String? {
         uri.getQueryParameter("conf")?.takeIf { it.isNotBlank() }?.let { return it }
@@ -197,9 +203,29 @@ object DeepLinkTunnelImporter {
         else -> null
     }
 
+    private fun describeUri(uri: Uri): String {
+        val path = uri.encodedPath.orEmpty()
+        val queryNames = uri.queryParameterNames
+            .sorted()
+            .joinToString("&") { "$it=<redacted>" }
+        return buildString {
+            append(uri.scheme ?: "<no-scheme>")
+            append("://")
+            append(uri.host.orEmpty())
+            append(path)
+            if (queryNames.isNotEmpty()) {
+                append('?')
+                append(queryNames)
+            }
+            if (!uri.fragment.isNullOrEmpty())
+                append("#<redacted>")
+        }
+    }
+
     private data class Metadata(val activate: Boolean?, val deleteAtMillis: Long?)
 
     private val SUPPORTED_SCHEMES = setOf("ninjawg")
+    private const val TAG = "WG/DeepLinkTunnelImporter"
     private val METADATA_PATTERN = Regex("^\\s*[#;]\\s*NinjaWG-(Activate|Up|Start|Delete-After|Auto-Delete-After|TTL|Delete-At|Expires-At|Expires)\\s*:\\s*(.*?)\\s*$", RegexOption.IGNORE_CASE)
     private val DURATION_PATTERN = Regex("^(\\d+)\\s*([a-zA-Z]*)$")
     private const val DEFAULT_TUNNEL_NAME = "wg"

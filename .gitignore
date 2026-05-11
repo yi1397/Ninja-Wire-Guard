@@ -5,6 +5,8 @@
 /.idea/libraries/
 /captures/
 /local.properties
+/.tmp_*/
+/release/
 .DS_Store
 .cxx/
 Thumbs.db
@@ -14,5 +16,6 @@ build/
 *.dex
 *.iml
 *.jks
+release-signing/
 gradlew.bat
 maint/

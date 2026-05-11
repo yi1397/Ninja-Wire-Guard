@@ -161,6 +161,7 @@ class MainActivity : BaseActivity(), FragmentManager.OnBackStackChangedListener 
             val result = try {
                 DeepLinkTunnelImporter.importFromIntent(intent)
             } catch (e: Throwable) {
+                Log.e(TAG, "Unable to import tunnel from deep link: ${DeepLinkTunnelImporter.describeIntent(intent)}", e)
                 Toast.makeText(this@MainActivity, getString(R.string.import_error, ErrorMessages[e]), Toast.LENGTH_LONG).show()
                 return@launch
             } ?: return@launch
